@@ -57,9 +57,9 @@ class DeviceManager {
           case distributedDeviceManager.DeviceStateChange.AVAILABLE:
             const remoteDevice = data.device
             this.isPaired = true
-            AppStorage.setOrCreate('RemoteConnectDeviceId', remoteDevice.deviceId)
+            AppStorage.setOrCreate('RemoteConnectDeviceId', remoteDevice.networkId)
             AppStorage.setOrCreate('isPaired', this.isPaired)
-            Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName)
+            Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName + ', networkId: ' + remoteDevice.networkId)
             this.deviceOnline(data.device);
             break;
           case distributedDeviceManager.DeviceStateChange.UNAVAILABLE:
@@ -236,7 +236,7 @@ class DeviceManager {
     let wantValue: Want = {
       bundleName: context.abilityInfo.bundleName,
       abilityName: 'EntryAbility',
-      deviceId: device.deviceId,
+      deviceId: device.networkId,
       parameters: {
         shared_list: JSON.stringify(shared_list)
       }
