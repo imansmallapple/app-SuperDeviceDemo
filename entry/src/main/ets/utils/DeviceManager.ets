@@ -3,6 +3,11 @@ import Log from './Log'
 import { BusinessError } from '@kit.BasicServicesKit';
 import { Want, common } from '@kit.AbilityKit';
 
+interface PendingStartAbility {
+  context: common.UIAbilityContext;
+  device: distributedDeviceManager.DeviceBasicInfo;
+  shared_list: string[];
+}
 
 class DeviceManager {
   private static instance: DeviceManager | undefined = undefined
@@ -13,6 +18,8 @@ class DeviceManager {
   private isDiscovering: boolean = false
   private boundDeviceList: string[] = []
   private isPaired: boolean = false
+  private pendingStartAbility?: PendingStartAbility
+  private bindTimeoutId?: number
 
   static getInstance(): DeviceManager {
     if (!DeviceManager.instance) {
@@ -47,9 +54,6 @@ class DeviceManager {
     }
     try {
       this.myDeviceManager.on('deviceStateChange', (data) => {
-        if (!AppStorage.get('isSender')) {
-          AppStorage.setOrCreate('isReceiver', true)
-        }
         if (!data) {
           return;
         }
@@ -61,12 +65,32 @@ class DeviceManager {
             AppStorage.setOrCreate('isPaired', this.isPaired)
             Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName + ', networkId: ' + remoteDevice.networkId)
             this.deviceOnline(data.device);
+            
+            // 清除超时定时器
+            if (this.bindTimeoutId) {
+              clearTimeout(this.bindTimeoutId)
+              this.bindTimeoutId = undefined
+            }
+            
+            // 如果有待启动的 Ability，现在启动它
+            if (this.pendingStartAbility && this.pendingStartAbility.device.deviceId === remoteDevice.deviceId) {
+              Log.info('deviceStateChange', 'Device paired, starting ability now')
+              this.startAbility(
+                this.pendingStartAbility.context,
+                this.pendingStartAbility.device,
+                this.pendingStartAbility.shared_list
+              )
+              this.pendingStartAbility = undefined
+            }
             break;
           case distributedDeviceManager.DeviceStateChange.UNAVAILABLE:
             this.isPaired = false
             AppStorage.setOrCreate('RemoteConnectDeviceId', '')
             AppStorage.setOrCreate('isPaired', this.isPaired)
             this.deviceOffline(data.device);
+            // 注意：不在这里清除 pendingStartAbility
+            // 因为 UNAVAILABLE 可能是配对过程中的中间状态
+            Log.info('deviceStateChange', 'Device unavailable: ' + data.device.deviceName)
             break;
         }
       });
@@ -173,10 +197,23 @@ class DeviceManager {
     device: distributedDeviceManager.DeviceBasicInfo,
     shared_list: string[]
   ): void {
-    let tmpList =
-      this.availableDeviceList.filter((item: distributedDeviceManager.DeviceBasicInfo) => device.deviceId ===
-      item.deviceId);
-    if (tmpList.length > 0) {
+    // 设置为发送端（无论是否需要配对）
+    AppStorage.setOrCreate('isSender', true)
+    AppStorage.setOrCreate('isReceiver', false)
+    
+    // 检查设备是否已经可用（系统层面已配对）
+    const isAvailable = this.availableDeviceList.some(
+      (item: distributedDeviceManager.DeviceBasicInfo) => item.deviceId === device.deviceId
+    )
+    
+    if (isAvailable) {
+      Log.info('DeviceManager', 'Device already available, start ability directly')
+      // 设置连接状态
+      this.isPaired = true
+      AppStorage.setOrCreate('RemoteConnectDeviceId', device.networkId)
+      AppStorage.setOrCreate('isPaired', this.isPaired)
+      Log.info('DeviceManager', 'Set remote device networkId: ' + device.networkId)
+      
       this.startAbility(context, device, shared_list);
       return;
     }
@@ -186,6 +223,7 @@ class DeviceManager {
       return;
     }
 
+    Log.info('DeviceManager', 'Device not available, start binding process with PIN')
     let bindParam: Record<string, string | number> = {
       'bindType': 1,
       'targetPkgName': context.abilityInfo.bundleName,
@@ -195,14 +233,33 @@ class DeviceManager {
     }
 
     try {
-      AppStorage.setOrCreate('isSender', true)
+      // 保存待启动的信息，等待 AVAILABLE 事件
+      const pendingInfo: PendingStartAbility = { 
+        context: context, 
+        device: device, 
+        shared_list: shared_list 
+      }
+      this.pendingStartAbility = pendingInfo
+      
+      // 设置 30 秒超时，如果没有收到 AVAILABLE 事件，则清除 pendingStartAbility
+      this.bindTimeoutId = setTimeout(() => {
+        if (this.pendingStartAbility && this.pendingStartAbility.device.deviceId === device.deviceId) {
+          Log.error('DeviceManager', 'Bind timeout, clearing pending start ability')
+          this.pendingStartAbility = undefined
+        }
+        this.bindTimeoutId = undefined
+      }, 30000)
+      
       this.myDeviceManager.bindTarget(device.deviceId, bindParam, (err: BusinessError) => {
         if (err && err.code !== 0) {
           Log.error('Device Manager',
             `authenticateDevice error code=${err.code}, msg=${JSON.stringify(err.message)}`)
+          // 注意：即使回调报错，也不清除 pendingStartAbility
+          // 因为 deviceStateChange AVAILABLE 事件才是最终判断标准
+          // 错误码 7 等可能是中间状态，不影响最终配对结果
           return;
         }
-        Log.info('DeviceManager', 'bindDevice success')
+        Log.info('DeviceManager', 'bindDevice callback success, waiting for AVAILABLE event')
         this.boundDeviceList.push(device.deviceId);
         AppStorage.setOrCreate('boundDeviceList', this.boundDeviceList);
       })
@@ -233,12 +290,16 @@ class DeviceManager {
 
   startAbility(context: common.UIAbilityContext, device: distributedDeviceManager.DeviceBasicInfo,
     shared_list: string[]): void {
+    // 获取本地设备的 networkId
+    const localNetworkId = this.myDeviceManager?.getLocalDeviceNetworkId() || ''
+    
     let wantValue: Want = {
       bundleName: context.abilityInfo.bundleName,
       abilityName: 'EntryAbility',
       deviceId: device.networkId,
       parameters: {
-        shared_list: JSON.stringify(shared_list)
+        shared_list: JSON.stringify(shared_list),
+        senderNetworkId: localNetworkId  // 传递发送端的 networkId
       }
     };
 
