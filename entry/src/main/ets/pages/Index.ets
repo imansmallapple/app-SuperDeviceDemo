@@ -33,22 +33,30 @@ struct Index {
 
   createKVStore(): void {
     this.kvStoreModel.createKvStore(this.context, (data: distributedKVStore.ChangeNotification) => {
-      this.messageList = []
+      Log.info('kvStore', 'dataChange deviceId:', data.deviceId, 'isSender:', this.isSender)
+      
+      // 发送端不处理接收消息，接收端才更新 receivedList
+      if (this.isSender) {
+        Log.info('kvStore', 'sender ignore dataChange')
+        return
+      }
+      
       if (data.insertEntries.length > 0) {
-        data.updateEntries.forEach((entry) => {
+        data.insertEntries.forEach((entry) => {
           Log.info('kvStore', 'inside insert', entry.key, entry.value.type, entry.value.value)
-          this.receivedList.push((entry.value.value) as string)
-          Log.info('kvStore', this.receivedList)
+          const value = JSON.parse((entry.value.value) as string) as string[]
+          this.receivedList = value  // 直接替换为远程发送的完整列表
+          Log.info('kvStore', 'receivedList after insert:', this.receivedList)
         })
       }
       if (data.updateEntries.length > 0) {
         data.updateEntries.forEach((entry) => {
           Log.info('kvStore', 'inside update', entry.key, entry.value.type, entry.value.value)
-          this.receivedList.push((entry.value.value) as string)
-          Log.info('kvStore', this.receivedList)
+          const value = JSON.parse((entry.value.value) as string) as string[]
+          this.receivedList = value  // 直接替换为远程发送的完整列表
+          Log.info('kvStore', 'receivedList after update:', this.receivedList)
         })
       }
-      // this.receivedList.push(data.insertEntries.length > 0 ? (data.insertEntries) : data.updateEntries)
     })
   }
 

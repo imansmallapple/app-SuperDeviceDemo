@@ -55,6 +55,7 @@ class KvStoreModel {
           `createKvStore enableSync fail, error=${JSON.stringify(error)}`);
       });
       this.setDataChangeListener(callback);
+      this.setSyncCompleteListener();
     }).catch((error: Error) => {
       Log.error('getKVStore',
         `createKvStore getKVStore failed, error=${JSON.stringify(error)}`);
@@ -77,10 +78,10 @@ class KvStoreModel {
 
       if (deviceId) {
         try {
-          this.kvStore!.sync([deviceId], distributedKVStore.SyncMode.PUSH_PULL)
-          Log.info('KvStoreModel', `sync to ${deviceId} success`)
-        } catch (err) {
-          Log.error('KvStoreModel', `sync to ${deviceId} failed: ${JSON.stringify(err)},${err}`)
+          this.kvStore!.sync([deviceId], distributedKVStore.SyncMode.PUSH_PULL);
+          Log.info('KvStoreModel', `sync to ${deviceId} triggered`)
+        } catch (error) {
+          Log.error('KvStoreModel', `sync exception: ${JSON.stringify(error)}`)
         }
       }
 
@@ -112,6 +113,25 @@ class KvStoreModel {
     } catch (error) {
       Log.error('KvStoreModel',
         `setDataChangeListener on('dataChange') failed, err=${JSON.stringify(error)}`);
+    }
+  }
+
+  /**
+   * Set the sync complete listener.
+   */
+  setSyncCompleteListener(): void {
+    if (this.kvStore === undefined) {
+      Log.error('KvStoreModel', 'setSyncCompleteListener kvStore is null')
+      return
+    }
+
+    try {
+      this.kvStore.on('syncComplete', (data) => {
+        Log.info('KvStoreModel', `syncComplete: ${JSON.stringify(data)}`);
+      });
+    } catch (error) {
+      Log.error('KvStoreModel',
+        `setSyncCompleteListener on('syncComplete') failed, err=${JSON.stringify(error)}`);
     }
   }
 
