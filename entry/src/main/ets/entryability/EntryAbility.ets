@@ -1,15 +1,11 @@
-import AbilityConstant from '@ohos.app.ability.AbilityConstant';
-import hilog from '@ohos.hilog';
-import UIAbility from '@ohos.app.ability.UIAbility';
-import Want from '@ohos.app.ability.Want';
-import window from '@ohos.window';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { Want, UIAbility, common, bundleManager, AbilityConstant } from '@kit.AbilityKit';
+import { window } from '@kit.ArkUI';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
-import common from '@ohos.app.ability.common';
 import Log from '../utils/Log';
-import bundleManager from '@ohos.bundle.bundleManager';
 import DeviceManager from '../utils/DeviceManager';
 
-const permissions: Array<Permissions> = ['ohos.permission.DISTRIBUTED_DATASYNC', 'ohos.permission.ACCESS_SERVICE_DM'];
+const permissions: Array<Permissions> = ['ohos.permission.DISTRIBUTED_DATASYNC'];
 
 export default class EntryAbility extends UIAbility {
   storage: LocalStorage = new LocalStorage();
@@ -24,8 +20,8 @@ export default class EntryAbility extends UIAbility {
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.want = want
 
-    if (this.want?.parameters?.messageList) {
-      let messageList: string[] = JSON.parse((this.want.parameters.messageList) as string)
+    if (this.want?.parameters?.shared_list) {
+      let messageList: string[] = JSON.parse((this.want.parameters.shared_list) as string)
       this.storage.setOrCreate('messageList', messageList)
     }
   }
@@ -34,8 +30,8 @@ export default class EntryAbility extends UIAbility {
     // Main window is created, set main page for this ability
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
 
-    if (this?.want?.parameters?.messageList) {
-      let messageList: string[] = JSON.parse((this.want.parameters.shared_data) as string)
+    if (this?.want?.parameters?.shared_list) {
+      let messageList: string[] = JSON.parse((this.want.parameters.shared_list) as string)
       this.storage.setOrCreate('messageList', messageList)
     }
 

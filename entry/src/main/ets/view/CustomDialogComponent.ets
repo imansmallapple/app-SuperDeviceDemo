@@ -1,18 +1,10 @@
-import common from '@ohos.app.ability.common'
-import deviceManager from '@ohos.distributedDeviceManager'
-import promptAction from '@ohos.promptAction'
-
-@Extend(Text)
-function ButtonTextStyle() {
-  .fontColor("#007DFF")
-  .fontSize(16)
-  .fontWeight(500)
-}
+import { distributedDeviceManager } from '@kit.DistributedServiceKit';
+import { common } from '@kit.AbilityKit';
 
 @CustomDialog
 export default struct DeviceListDialog {
   controller?: CustomDialogController
-  @Link deviceList: deviceManager.DeviceBasicInfo[]
+  @Link deviceList: distributedDeviceManager.DeviceBasicInfo[]
   @Link param: string[]
   @State toConnectDeviceId: string = ''
   @Link connectedDeviceId: string
@@ -22,13 +14,14 @@ export default struct DeviceListDialog {
   @Link isPaired: boolean
   cancel: () => void = () => {
   }
-  startAbility: (context: common.UIAbilityContext, device: deviceManager.DeviceBasicInfo, textInput: string[]) => void
+  startAbility: (context: common.UIAbilityContext, device: distributedDeviceManager.DeviceBasicInfo,
+    textInput: string[]) => void
     = () => {
   }
 
   getDeviceInfo(index: number): string {
     if (this.deviceList.length == 0) {
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: 'No available device!'
       })
       return ''
@@ -63,7 +56,7 @@ export default struct DeviceListDialog {
       .height(56)
 
       List() {
-        ForEach(this.deviceList, (item: deviceManager.DeviceBasicInfo, index: number) => {
+        ForEach(this.deviceList, (item: distributedDeviceManager.DeviceBasicInfo, index: number) => {
           ListItem() {
             Column() {
               Row() {
@@ -117,14 +110,16 @@ export default struct DeviceListDialog {
               }
             }
           }
-        }, (item: deviceManager.DeviceBasicInfo) => item.deviceId)
+        }, (item: distributedDeviceManager.DeviceBasicInfo) => item.deviceId)
       }
       .width('100%')
 
       Row() {
         Column() {
           Text('Cancel')
-            .ButtonTextStyle()
+            .fontColor("#007DFF")
+            .fontSize(16)
+            .fontWeight(500)
         }
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
@@ -141,22 +136,25 @@ export default struct DeviceListDialog {
 
         Column() {
           Text('Confirm')
-            .ButtonTextStyle()
+            .fontColor("#007DFF")
+            .fontSize(16)
+            .fontWeight(500)
         }
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .height(40)
         .onClick(() => {
           if (-1 === this.selectedIndex) {
-            promptAction.showToast({
-              message: 'Please select a device!'
+            this.getUIContext().getPromptAction().showToast({
+              message: 'No available device!'
             })
           } else {
             if (this.controller !== undefined) {
               this.controller.close()
             }
-            this.startAbility(getContext(this) as common.UIAbilityContext, this.deviceList[this.selectedIndex], this.param)
-            promptAction.showToast({
+            this.startAbility(this.getUIContext().getHostContext() as common.UIAbilityContext, this.deviceList[this.selectedIndex],
+              this.param)
+            this.getUIContext().getPromptAction().showToast({
               message: `Device: ${this.selectedDeviceName} connected!`
             })
             this.connectedDeviceId = this.toConnectDeviceId
@@ -165,9 +163,6 @@ export default struct DeviceListDialog {
         })
       }
       .backgroundColor(Color.White)
-      .border({
-        color: Color.White,
-      })
     }
   }
 }
