@@ -1,18 +1,16 @@
 import DeviceManager from '../utils/DeviceManager'
 import DeviceListDialog from '../view/CustomDialogComponent';
-import deviceManager from '@ohos.distributedDeviceManager'
+import { distributedDeviceManager } from '@kit.DistributedServiceKit';
 import Log from '../utils/Log';
-import common from '@ohos.app.ability.common';
+import { common } from '@kit.AbilityKit';
 import KvStoreModel from '../utils/kvStoreUtil';
-import promptAction from '@ohos.promptAction';
+// import { distributedKVStore } from '@kit.ArkData';
 import distributedKVStore from '@ohos.data.distributedKVStore';
 
-let storage = LocalStorage.getShared();
-
-@Entry(storage)
+@Entry
 @Component
 struct Index {
-  @StorageLink('deviceList') deviceList: deviceManager.DeviceBasicInfo[] = []
+  @StorageLink('deviceList') deviceList: distributedDeviceManager.DeviceBasicInfo[] = []
   @StorageLink('RemoteConnectDeviceId') remoteConnectDeviceId: string = ''
   @StorageLink('isSender') isSender: boolean = false
   @StorageLink('isReceiver') isReceiver: boolean = false
@@ -23,26 +21,12 @@ struct Index {
   @State receivedText: string[] = []
   @State isLoading: boolean = false
   @State isAbleUnbind: boolean = false
-  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+  private context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
   private kvStoreModel: KvStoreModel = new KvStoreModel();
   @State receivedList: string[] = []
+  storage: LocalStorage | undefined = this.getUIContext().getSharedLocalStorage()
 
   aboutToAppear() {
-    // this.kvStoreModel.createKvStore(this.context, (data) => {
-    //   Log.info('KvStore', 'KvStore onDataChange triggered')
-    //   data.insertEntries.forEach((entry) => {
-    //     Log.info('KvStore', `Key: ${entry.key}, Value: ${JSON.stringify(entry.value)}`)
-    //     if (entry.key === 'shared_text') {
-    //       try {
-    //         let newData = JSON.parse((entry.value.value) as string) as string[]
-    //         this.receivedText = [...newData]
-    //         Log.info('KvStore', 'Updated receivedText: ' + this.receivedText)
-    //       } catch (e) {
-    //         Log.error('KvStore', 'Failed to parse shared_text: ' + JSON.stringify(e))
-    //       }
-    //     }
-    //   })
-    // })
     this.createKVStore()
     DeviceManager.clearDeviceList()
   }
@@ -91,7 +75,6 @@ struct Index {
   //     this.isAbleUnbind = false
   //   }
   // }
-
   startFindingNearbyDevice(): void {
     DeviceManager.startDeviceDiscovery()
   }
@@ -104,7 +87,7 @@ struct Index {
     Log.info('ConnectedDeviceId: ', this.connectedDeviceId)
     Log.info('ConnectedDeviceId data: ', data)
     this.messageList.push(data)
-    this.kvStoreModel.put('sync messageList', JSON.stringify(this.messageList))
+    this.kvStoreModel.put('sync messageList', JSON.stringify(this.messageList), this.remoteConnectDeviceId)
     // Log.info('ConnectedDeviceId shared_text: ', JSON.stringify(this.shared_data))
     // this.shared_data.push(data)
     // this.kvStoreModel.put('shared_text', JSON.stringify(this.shared_data), this.connectedDeviceId)
@@ -112,7 +95,7 @@ struct Index {
 
   startAbility(
     context: common.UIAbilityContext,
-    device: deviceManager.DeviceBasicInfo,
+    device: distributedDeviceManager.DeviceBasicInfo,
     shared_list: string[]
   ): void {
     DeviceManager.authenticateDevice(context, device, shared_list)
@@ -149,7 +132,9 @@ struct Index {
       if (this.connectedDeviceId !== '') {
         Button('Unbind')
           .onClick(() => {
-            promptAction.showToast({ message: 'Unbind...' })
+            this.getUIContext().getPromptAction().showToast({
+              message: "unbinding..."
+            })
             setTimeout(() => {
               DeviceManager.unbindDevice(this.connectedDeviceId)
               this.connectedDeviceId = ''
@@ -157,7 +142,8 @@ struct Index {
             }, 100)
           })
       }
-      Text('Connected device id: ' + this.remoteConnectDeviceId == '' ? this.connectedDeviceId : this.remoteConnectDeviceId)
+      Text('Connected device id: ' + this.remoteConnectDeviceId == '' ? this.connectedDeviceId :
+      this.remoteConnectDeviceId)
 
       TextInput({ text: this.textInput, placeholder: 'Input your word..' })
         .onChange((value: string) => {
@@ -166,7 +152,7 @@ struct Index {
 
       Button('Send')
         .onClick(() => {
-          if (!this.connectedDeviceId ? 0 : !this.remoteConnectDeviceId || !this.textInput) {
+          if ((!this.connectedDeviceId && !this.remoteConnectDeviceId) || !this.textInput) {
             Log.info('No device connected or text is empty!')
             return
           }

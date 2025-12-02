@@ -1,15 +1,15 @@
-import deviceManager from '@ohos.distributedDeviceManager'
+import { distributedDeviceManager } from '@kit.DistributedServiceKit'
 import Log from './Log'
-import common from '@ohos.app.ability.common'
-import Want from '@ohos.app.ability.Want'
-import { BusinessError } from '@ohos.base'
+import { BusinessError } from '@kit.BasicServicesKit';
+import { Want, common } from '@kit.AbilityKit';
+
 
 class DeviceManager {
   private static instance: DeviceManager | undefined = undefined
-  private myDeviceManager?: deviceManager.DeviceManager
-  private deviceList: deviceManager.DeviceBasicInfo[] = []
-  private availableDeviceList: deviceManager.DeviceBasicInfo[] = []
-  private discoverList: deviceManager.DeviceBasicInfo[] = []
+  private myDeviceManager?: distributedDeviceManager.DeviceManager
+  private deviceList: distributedDeviceManager.DeviceBasicInfo[] = []
+  private availableDeviceList: distributedDeviceManager.DeviceBasicInfo[] = []
+  private discoverList: distributedDeviceManager.DeviceBasicInfo[] = []
   private isDiscovering: boolean = false
   private boundDeviceList: string[] = []
   private isPaired: boolean = false
@@ -28,7 +28,7 @@ class DeviceManager {
     }
 
     try {
-      this.myDeviceManager = deviceManager.createDeviceManager("com.example.superdevicedemo");
+      this.myDeviceManager = distributedDeviceManager.createDeviceManager("com.example.superdevicedemo");
 
       this.registerDeviceStateListener();
       this.getLocalDeviceInfo();
@@ -50,9 +50,11 @@ class DeviceManager {
         if (!AppStorage.get('isSender')) {
           AppStorage.setOrCreate('isReceiver', true)
         }
-        if (!data) return;
+        if (!data) {
+          return;
+        }
         switch (data.action) {
-          case deviceManager.DeviceStateChange.AVAILABLE:
+          case distributedDeviceManager.DeviceStateChange.AVAILABLE:
             const remoteDevice = data.device
             this.isPaired = true
             AppStorage.setOrCreate('RemoteConnectDeviceId', remoteDevice.deviceId)
@@ -60,7 +62,7 @@ class DeviceManager {
             Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName)
             this.deviceOnline(data.device);
             break;
-          case deviceManager.DeviceStateChange.UNAVAILABLE:
+          case distributedDeviceManager.DeviceStateChange.UNAVAILABLE:
             this.isPaired = false
             AppStorage.setOrCreate('RemoteConnectDeviceId', '')
             AppStorage.setOrCreate('isPaired', this.isPaired)
@@ -75,18 +77,23 @@ class DeviceManager {
   }
 
   getLocalDeviceInfo(): void {
-    if (!this.myDeviceManager) return;
+    if (!this.myDeviceManager) {
+      return;
+    }
 
     try {
-      Log.info('DeviceManager', `Local Device ID: ${this.myDeviceManager.getLocalDeviceId()}, Name: ${this.myDeviceManager.getLocalDeviceName()}, Type: ${this.myDeviceManager.getLocalDeviceType()
-        .toString()}, Network ID:${this.myDeviceManager.getLocalDeviceNetworkId()}`);
+      Log.info('DeviceManager',
+        `Local Device ID: ${this.myDeviceManager.getLocalDeviceId()}, Name: ${this.myDeviceManager.getLocalDeviceName()}, Type: ${this.myDeviceManager.getLocalDeviceType()
+          .toString()}, Network ID:${this.myDeviceManager.getLocalDeviceNetworkId()}`);
     } catch (err) {
       Log.error('DeviceManager', `getLocalDeviceInfo failed: ${JSON.stringify(err)}`);
     }
   }
 
   getAvailableDeviceList(): void {
-    if (!this.myDeviceManager) return;
+    if (!this.myDeviceManager) {
+      return;
+    }
 
     try {
       this.availableDeviceList = this.myDeviceManager.getAvailableDeviceListSync();
@@ -101,17 +108,17 @@ class DeviceManager {
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
 
-  deviceOnline(device: deviceManager.DeviceBasicInfo): void {
+  deviceOnline(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.availableDeviceList.push(device);
     this.addToDeviceList(device);
   }
 
-  deviceOffline(device: deviceManager.DeviceBasicInfo): void {
+  deviceOffline(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.availableDeviceList = this.availableDeviceList.filter(item => item.networkId !== device.networkId);
     this.deleteFromDeviceList(device);
   }
 
-  addToDeviceList(device: deviceManager.DeviceBasicInfo): void {
+  addToDeviceList(device: distributedDeviceManager.DeviceBasicInfo): void {
     const index = this.deviceList.findIndex(d => d.deviceId === device.deviceId);
     if (index >= 0) {
       this.deviceList[index] = device;
@@ -121,7 +128,7 @@ class DeviceManager {
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
 
-  deleteFromDeviceList(device: deviceManager.DeviceBasicInfo): void {
+  deleteFromDeviceList(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.deviceList = this.deviceList.filter(d => d.deviceId !== device.deviceId);
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
@@ -140,9 +147,6 @@ class DeviceManager {
       this.myDeviceManager.startDiscovering(
         {
           discoverTargetType: 1
-        },
-        {
-          availableStatus: 0,
         }
       );
       this.isDiscovering = true;
@@ -166,10 +170,12 @@ class DeviceManager {
 
   authenticateDevice(
     context: common.UIAbilityContext,
-    device: deviceManager.DeviceBasicInfo,
+    device: distributedDeviceManager.DeviceBasicInfo,
     shared_list: string[]
   ): void {
-    let tmpList = this.availableDeviceList.filter((item: deviceManager.DeviceBasicInfo) => device.deviceId === item.deviceId);
+    let tmpList =
+      this.availableDeviceList.filter((item: distributedDeviceManager.DeviceBasicInfo) => device.deviceId ===
+      item.deviceId);
     if (tmpList.length > 0) {
       this.startAbility(context, device, shared_list);
       return;
@@ -183,21 +189,22 @@ class DeviceManager {
     let bindParam: Record<string, string | number> = {
       'bindType': 1,
       'targetPkgName': context.abilityInfo.bundleName,
-      'appName': context.abilityInfo.applicationInfo.name,
+      'appName': context.abilityInfo.labelId.toString(),
+      'appOperation': 'SuperDevice data sync',
+      'customDescription': 'Allow data synchronization'
     }
 
     try {
       AppStorage.setOrCreate('isSender', true)
       this.myDeviceManager.bindTarget(device.deviceId, bindParam, (err: BusinessError) => {
-        if (err) {
+        if (err && err.code !== 0) {
           Log.error('Device Manager',
             `authenticateDevice error code=${err.code}, msg=${JSON.stringify(err.message)}`)
           return;
-        } else {
-          Log.info('DeviceManager', 'bindDevice success')
-          this.boundDeviceList.push(device.deviceId);
-          AppStorage.setOrCreate('boundDeviceList', this.boundDeviceList);
         }
+        Log.info('DeviceManager', 'bindDevice success')
+        this.boundDeviceList.push(device.deviceId);
+        AppStorage.setOrCreate('boundDeviceList', this.boundDeviceList);
       })
     } catch (error) {
       Log.error('Device Manager',
@@ -224,7 +231,8 @@ class DeviceManager {
     return this.boundDeviceList;
   }
 
-  startAbility(context: common.UIAbilityContext, device: deviceManager.DeviceBasicInfo, shared_list: string[]): void {
+  startAbility(context: common.UIAbilityContext, device: distributedDeviceManager.DeviceBasicInfo,
+    shared_list: string[]): void {
     let wantValue: Want = {
       bundleName: context.abilityInfo.bundleName,
       abilityName: 'EntryAbility',
@@ -242,18 +250,21 @@ class DeviceManager {
   }
 
   stopDeviceDiscovery(): void {
-    if (this.isDiscovering) {
-      Log.warn('DeviceManager', 'Discovery already in progress, skipping...');
+    if (!this.myDeviceManager) {
+      Log.error('DeviceManager', 'stopDeviceDiscovery failed: manager not initialized');
       return;
     }
 
-    if (!this.myDeviceManager) return;
-
-    try {
-      this.myDeviceManager.stopDiscovering();
-      this.isDiscovering = false;
-    } catch (err) {
-      Log.error('DeviceManager', `stopDeviceDiscovery failed: ${JSON.stringify(err)}`);
+    if (this.isDiscovering) {
+      try {
+        this.myDeviceManager.stopDiscovering()
+        this.isDiscovering = false;
+        Log.info('DeviceManager', 'Device discovery stopped');
+      } catch (err) {
+        Log.error('DeviceManager', `stopDeviceDiscovery failed: ${JSON.stringify(err)}`);
+      }
+    } else {
+      Log.info('DeviceManager', 'Device discovery not active, no need to stop');
     }
   }
 
@@ -263,7 +274,7 @@ class DeviceManager {
     }
   }
 
-  deviceFound(device: deviceManager.DeviceBasicInfo): void {
+  deviceFound(device: distributedDeviceManager.DeviceBasicInfo): void {
     if (!this.discoverList.find(d => d.deviceId === device.deviceId)) {
       this.discoverList.push(device);
       this.addToDeviceList(device);

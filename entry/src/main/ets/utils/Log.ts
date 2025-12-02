@@ -1,4 +1,4 @@
-import hilog from '@ohos.hilog';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export default class Log {
     private static readonly DOMAIN = 0x0230;
