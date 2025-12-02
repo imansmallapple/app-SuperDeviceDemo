@@ -15,33 +15,33 @@
       }
     ],
     "products": [
-      {
-        "name": "default",
-        "signingConfig": "default",
-        "compileSdkVersion": 20,
-        "compatibleSdkVersion": 20,
-        "runtimeOS": "OpenHarmony",
-        "buildOption": {
-          "strictMode": {
-            "caseSensitiveCheck": true,
-            "useNormalizedOHMUrl": true
-          }
-        },
-        "targetSdkVersion": 20
-      },
 //      {
 //        "name": "default",
 //        "signingConfig": "default",
-//        "targetSdkVersion": "5.1.0(18)",
-//        "compatibleSdkVersion": "5.1.0(18)",
-//        "runtimeOS": "HarmonyOS",
+//        "compileSdkVersion": 20,
+//        "compatibleSdkVersion": 20,
+//        "runtimeOS": "OpenHarmony",
 //        "buildOption": {
 //          "strictMode": {
 //            "caseSensitiveCheck": true,
 //            "useNormalizedOHMUrl": true
 //          }
-//        }
-//      }
+//        },
+//        "targetSdkVersion": 20
+//      },
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "5.1.0(18)",
+        "compatibleSdkVersion": "5.1.0(18)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
     ],
     "buildModeSet": [
       {

@@ -27,8 +27,18 @@ struct Index {
   storage: LocalStorage | undefined = this.getUIContext().getSharedLocalStorage()
 
   aboutToAppear() {
+    Log.info('Index', 'aboutToAppear - isSender:', this.isSender, 'isReceiver:', this.isReceiver)
     this.createKVStore()
-    DeviceManager.clearDeviceList()
+    
+    // 只有发送端才清空设备列表，接收端不需要
+    if (!this.isReceiver) {
+      DeviceManager.clearDeviceList()
+    }
+    
+    // 如果是接收端，记录日志
+    if (this.isReceiver) {
+      Log.info('Index', 'This is receiver side, waiting for messages...')
+    }
   }
 
   createKVStore(): void {
@@ -96,9 +106,30 @@ struct Index {
     Log.info('ConnectedDeviceId data: ', data)
     this.messageList.push(data)
     this.kvStoreModel.put('sync messageList', JSON.stringify(this.messageList), this.remoteConnectDeviceId)
-    // Log.info('ConnectedDeviceId shared_text: ', JSON.stringify(this.shared_data))
-    // this.shared_data.push(data)
-    // this.kvStoreModel.put('shared_text', JSON.stringify(this.shared_data), this.connectedDeviceId)
+    this.textInput = ''  // 清空输入框
+  }
+
+  @Builder
+  MessageBubble(message: string, isSent: boolean) {
+    Row() {
+      if (isSent) {
+        Blank()
+      }
+      
+      Text(message)
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .backgroundColor(isSent ? '#007AFF' : '#E5E5EA')
+        .fontColor(isSent ? Color.White : Color.Black)
+        .borderRadius(16)
+        .width('70%')
+        .wordBreak(WordBreak.BREAK_ALL)
+      
+      if (!isSent) {
+        Blank()
+      }
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 4, bottom: 4 })
   }
 
   startAbility(
@@ -112,77 +143,163 @@ struct Index {
 
   build() {
     Column() {
+      // 顶部导航栏
       Row() {
-        Button('Find nearby Device')
-          .onClick(() => {
-            this.startFindingNearbyDevice()
-            this.dialogController.open()
-          })
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Center)
-
-      Row() {
-        Text(`${this.isSender ? 'Sender' : 'Receiver'}`)
-          .alignSelf(ItemAlign.Start)
-
-        Text(`Paired: ${this.isPaired}`)
-          .alignSelf(ItemAlign.End)
-      }
-      .width('100%')
-      .zIndex(1)
-      .justifyContent(FlexAlign.End)
-
-      if (this.isLoading) {
-        LoadingProgress()
-          .width(50)
-      }
-      if (this.connectedDeviceId !== '') {
-        Button('Unbind')
+        Text(this.isPaired ? 
+          `${this.isSender ? '📤 Connected' : '📥 Connected'}` : 
+          '🔗 Not Connected')
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.isPaired ? '#007AFF' : '#8E8E93')
+        
+        Blank()
+        
+        Button({ type: ButtonType.Normal }) {
+          Text('🔍')
+            .fontSize(20)
+        }
+        .width(40)
+        .height(40)
+        .borderRadius(20)
+        .backgroundColor('#F2F2F7')
+        .onClick(() => {
+          this.startFindingNearbyDevice()
+          this.dialogController.open()
+        })
+        
+        if (this.isPaired && this.remoteConnectDeviceId !== '') {
+          Button({ type: ButtonType.Normal }) {
+            Text('✕')
+              .fontSize(20)
+              .fontColor('#FF3B30')
+          }
+          .width(40)
+          .height(40)
+          .borderRadius(20)
+          .backgroundColor('#F2F2F7')
+          .margin({ left: 8 })
           .onClick(() => {
             this.getUIContext().getPromptAction().showToast({
-              message: "unbinding..."
+              message: "Disconnecting..."
             })
             setTimeout(() => {
               DeviceManager.unbindDevice(this.connectedDeviceId)
               this.connectedDeviceId = ''
               this.remoteConnectDeviceId = ''
+              this.messageList = []
+              this.receivedList = []
             }, 100)
           })
+        }
       }
-      Text('Connected device id: ' + this.remoteConnectDeviceId == '' ? this.connectedDeviceId :
-      this.remoteConnectDeviceId)
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .backgroundColor('#F9F9F9')
+      .borderRadius({ bottomLeft: 12, bottomRight: 12 })
+      .shadow({ radius: 2, color: '#00000010', offsetY: 2 })
 
-      TextInput({ text: this.textInput, placeholder: 'Input your word..' })
+      // 连接状态信息
+      if (this.isPaired) {
+        Row() {
+          Text(`Role: ${this.isSender ? 'Sender' : 'Receiver'}`)
+            .fontSize(12)
+            .fontColor('#8E8E93')
+          
+          Text('•')
+            .fontSize(12)
+            .fontColor('#8E8E93')
+            .margin({ left: 8, right: 8 })
+          
+          Text(`Device ID: ${this.remoteConnectDeviceId.substring(0, 8)}...`)
+            .fontSize(12)
+            .fontColor('#8E8E93')
+            .width('60%')
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+        .backgroundColor('#F2F2F7')
+        .justifyContent(FlexAlign.Center)
+      }
+
+      // 消息列表区域
+      List({ space: 4 }) {
+        // 显示发送的消息
+        ForEach(this.messageList, (item: string, index: number) => {
+          ListItem() {
+            this.MessageBubble(item, true)
+          }
+        }, (item: string, index: number) => `sent_${index}_${item}`)
+        
+        // 显示接收的消息
+        ForEach(this.receivedList, (item: string, index: number) => {
+          ListItem() {
+            this.MessageBubble(item, false)
+          }
+        }, (item: string, index: number) => `received_${index}_${item}`)
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .backgroundColor('#FFFFFF')
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+
+      // 底部输入区域
+      Row() {
+        TextInput({ 
+          text: this.textInput, 
+          placeholder: 'Type a message...' 
+        })
+        .layoutWeight(1)
+        .height(40)
+        .borderRadius(20)
+        .backgroundColor('#F2F2F7')
+        .padding({ left: 16, right: 16 })
         .onChange((value: string) => {
           this.textInput = value
         })
+        .onSubmit(() => {
+          if ((!this.connectedDeviceId && !this.remoteConnectDeviceId) || !this.textInput) {
+            this.getUIContext().getPromptAction().showToast({
+              message: "No device connected or empty message"
+            })
+            return
+          }
+          if (this.textInput) {
+            this.pushData(this.textInput)
+          }
+        })
 
-      Button('Send')
+        Button({ type: ButtonType.Circle }) {
+          Text('➤')
+            .fontSize(20)
+            .fontColor(Color.White)
+        }
+        .width(40)
+        .height(40)
+        .margin({ left: 8 })
+        .backgroundColor(this.textInput ? '#007AFF' : '#C7C7CC')
+        .enabled(!!this.textInput)
         .onClick(() => {
           if ((!this.connectedDeviceId && !this.remoteConnectDeviceId) || !this.textInput) {
-            Log.info('No device connected or text is empty!')
+            this.getUIContext().getPromptAction().showToast({
+              message: "No device connected or empty message"
+            })
             return
           }
 
           if (this.textInput) {
             this.pushData(this.textInput)
-            // this.kvStoreModel.put('shared_text', this.textInput, this.connectDeviceId)
           }
         })
-
-      Text('Send message:')
-      ForEach(this.messageList, (item: string) => {
-        Text(item)
-      })
-
-      Text('receive message:')
-      ForEach(this.receivedList, (item: string) => {
-        Text(item)
-      })
+      }
+      .width('100%')
+      .padding(12)
+      .backgroundColor('#F9F9F9')
+      .borderRadius({ topLeft: 12, topRight: 12 })
 
     }
     .width('100%')
     .height('100%')
+    .backgroundColor('#FFFFFF')
   }
 }

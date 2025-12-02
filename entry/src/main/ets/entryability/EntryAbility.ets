@@ -14,25 +14,70 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.want = want
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate')
+    Log.info('EntryAbility', 'onCreate want parameters: ' + JSON.stringify(want.parameters))
+    Log.info('EntryAbility', 'onCreate deviceId: ' + want.deviceId)
     DeviceManager.createDeviceManager()
+    
+    // 只有当 deviceId 存在时（远程启动），才设置为接收端
+    // 本地启动时 deviceId 为 undefined 或空字符串
+    if (want.deviceId && want?.parameters?.shared_list) {
+      Log.info('EntryAbility', 'Remote start detected, this is receiver')
+      AppStorage.setOrCreate('isReceiver', true)
+      AppStorage.setOrCreate('isSender', false)
+      AppStorage.setOrCreate('isPaired', true)
+      
+      // 设置发送端的 networkId
+      if (want.parameters.senderNetworkId) {
+        AppStorage.setOrCreate('RemoteConnectDeviceId', want.parameters.senderNetworkId as string)
+        Log.info('EntryAbility', 'Set sender networkId: ' + want.parameters.senderNetworkId)
+      }
+    } else {
+      Log.info('EntryAbility', 'Local start, not setting receiver flag')
+    }
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.want = want
+    Log.info('EntryAbility', 'onNewWant want parameters: ' + JSON.stringify(want.parameters))
+    Log.info('EntryAbility', 'onNewWant deviceId: ' + want.deviceId)
 
-    if (this.want?.parameters?.shared_list) {
+    // 只有当 deviceId 存在时（远程启动），才设置为接收端
+    if (want.deviceId && this.want?.parameters?.shared_list) {
       let messageList: string[] = JSON.parse((this.want.parameters.shared_list) as string)
+      Log.info('EntryAbility', 'Remote start, received messageList: ' + JSON.stringify(messageList))
       this.storage.setOrCreate('messageList', messageList)
+      
+      AppStorage.setOrCreate('isReceiver', true)
+      AppStorage.setOrCreate('isSender', false)
+      AppStorage.setOrCreate('isPaired', true)
+      
+      if (this.want.parameters.senderNetworkId) {
+        AppStorage.setOrCreate('RemoteConnectDeviceId', this.want.parameters.senderNetworkId as string)
+        Log.info('EntryAbility', 'Set sender networkId: ' + this.want.parameters.senderNetworkId)
+      }
     }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // Main window is created, set main page for this ability
     hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+    Log.info('EntryAbility', 'onWindowStageCreate want parameters: ' + JSON.stringify(this.want?.parameters))
+    Log.info('EntryAbility', 'onWindowStageCreate deviceId: ' + this.want?.deviceId)
 
-    if (this?.want?.parameters?.shared_list) {
+    // 只有当 deviceId 存在时（远程启动），才设置为接收端
+    if (this?.want?.deviceId && this?.want?.parameters?.shared_list) {
       let messageList: string[] = JSON.parse((this.want.parameters.shared_list) as string)
+      Log.info('EntryAbility', 'Remote start, setting messageList in storage: ' + JSON.stringify(messageList))
       this.storage.setOrCreate('messageList', messageList)
+      
+      AppStorage.setOrCreate('isReceiver', true)
+      AppStorage.setOrCreate('isSender', false)
+      AppStorage.setOrCreate('isPaired', true)
+      
+      if (this.want.parameters.senderNetworkId) {
+        AppStorage.setOrCreate('RemoteConnectDeviceId', this.want.parameters.senderNetworkId as string)
+        Log.info('EntryAbility', 'Set sender networkId: ' + this.want.parameters.senderNetworkId)
+      }
     }
 
     checkPermissions(this.context)
