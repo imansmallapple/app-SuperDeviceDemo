@@ -408,20 +408,34 @@ struct Index {
         Blank()
       }
       
-      Text(message)
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .backgroundColor(isSent ? '#007AFF' : '#E5E5EA')
-        .fontColor(isSent ? Color.White : Color.Black)
-        .borderRadius(16)
-        .width('70%')
-        .wordBreak(WordBreak.BREAK_ALL)
+      // 消息气泡容器
+      Column() {
+        Text(message)
+          .fontSize(16)
+          .fontColor(isSent ? Color.White : '#1C1C1E')
+          .lineHeight(22)
+          .wordBreak(WordBreak.BREAK_WORD)
+          .textAlign(TextAlign.Start)
+      }
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .constraintSize({ maxWidth: '75%' })  // 最大宽度 75%，自适应内容
+      .backgroundColor(isSent ? '#007AFF' : '#E9E9EB')
+      .borderRadius(isSent ? { topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 4 } : 
+                              { topLeft: 18, topRight: 18, bottomLeft: 4, bottomRight: 18 })
+      .shadow({ 
+        radius: 8, 
+        color: isSent ? '#007AFF20' : '#00000010', 
+        offsetX: 0, 
+        offsetY: 2 
+      })
       
       if (!isSent) {
         Blank()
       }
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 4, bottom: 4 })
+    .padding({ left: 16, right: 16, top: 6, bottom: 6 })
+    .justifyContent(isSent ? FlexAlign.End : FlexAlign.Start)
   }
 
   startAbility(
@@ -437,22 +451,30 @@ struct Index {
     Column() {
       // 顶部导航栏
       Row() {
-        Text(this.isPaired ? 
-          `${this.isSender ? '📤 Connected' : '📥 Connected'}` : 
-          '🔗 Not Connected')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.isPaired ? '#007AFF' : '#8E8E93')
+        Column() {
+          Text(this.isPaired ? 'Chat Room' : 'Not Connected')
+            .fontSize(17)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#1C1C1E')
+          
+          if (this.isPaired) {
+            Text('Connected & Syncing')
+              .fontSize(12)
+              .fontColor('#34C759')
+              .margin({ top: 2 })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
         
         Blank()
         
         Button({ type: ButtonType.Normal }) {
           Text('🔍')
-            .fontSize(20)
+            .fontSize(22)
         }
-        .width(40)
-        .height(40)
-        .borderRadius(20)
+        .width(44)
+        .height(44)
+        .borderRadius(22)
         .backgroundColor('#F2F2F7')
         .onClick(() => {
           this.startFindingNearbyDevice()
@@ -462,14 +484,15 @@ struct Index {
         if (this.isPaired && this.remoteConnectDeviceId !== '') {
           Button({ type: ButtonType.Normal }) {
             Text('✕')
-              .fontSize(20)
+              .fontSize(22)
               .fontColor('#FF3B30')
+              .fontWeight(FontWeight.Medium)
           }
-          .width(40)
-          .height(40)
-          .borderRadius(20)
+          .width(44)
+          .height(44)
+          .borderRadius(22)
           .backgroundColor('#F2F2F7')
-          .margin({ left: 8 })
+          .margin({ left: 10 })
           .onClick(() => {
             this.getUIContext().getPromptAction().showToast({
               message: "Disconnecting..."
@@ -485,36 +508,38 @@ struct Index {
         }
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor('#F9F9F9')
-      .borderRadius({ bottomLeft: 12, bottomRight: 12 })
-      .shadow({ radius: 2, color: '#00000010', offsetY: 2 })
+      .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+      .backgroundColor('#FFFFFF')
+      .shadow({ radius: 3, color: '#00000008', offsetY: 1 })
 
       // 连接状态信息
       if (this.isPaired) {
         Row() {
-          Text(`💬 Chat Mode`)
-            .fontSize(12)
-            .fontColor('#8E8E93')
+          Row() {
+            Text('●')
+              .fontSize(10)
+              .fontColor('#34C759')
+              .margin({ right: 6 })
+            
+            Text('Online')
+              .fontSize(13)
+              .fontColor('#34C759')
+              .fontWeight(FontWeight.Medium)
+          }
           
-          Text('•')
-            .fontSize(12)
-            .fontColor('#8E8E93')
-            .margin({ left: 8, right: 8 })
+          Blank()
           
-          Text(`Device ID: ${this.remoteConnectDeviceId.substring(0, 8)}...`)
+          Text(`ID: ${this.remoteConnectDeviceId.substring(0, 12)}...`)
             .fontSize(12)
             .fontColor('#8E8E93')
-            .width('60%')
         }
         .width('100%')
-        .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-        .backgroundColor('#F2F2F7')
-        .justifyContent(FlexAlign.Center)
+        .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+        .backgroundColor('#F8F8F8')
       }
 
       // 消息列表区域
-      List({ space: 4, scroller: this.scroller }) {
+      List({ space: 8, scroller: this.scroller }) {
         // 显示所有消息（按时间排序）
         ForEach(this.allMessages, (item: ChatMessage, index: number) => {
           ListItem() {
@@ -524,7 +549,8 @@ struct Index {
       }
       .layoutWeight(1)
       .width('100%')
-      .backgroundColor('#FFFFFF')
+      .backgroundColor('#F5F5F5')
+      .padding({ top: 8, bottom: 8 })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
 
@@ -532,13 +558,16 @@ struct Index {
       Row() {
         TextInput({ 
           text: this.textInput, 
-          placeholder: 'Type a message...' 
+          placeholder: '💬 Type a message...' 
         })
         .layoutWeight(1)
-        .height(40)
-        .borderRadius(20)
-        .backgroundColor('#F2F2F7')
-        .padding({ left: 16, right: 16 })
+        .height(44)
+        .borderRadius(22)
+        .backgroundColor('#FFFFFF')
+        .padding({ left: 18, right: 18 })
+        .fontSize(16)
+        .placeholderColor('#AEAEB2')
+        .border({ width: 1, color: '#E5E5EA' })
         .onChange((value: string) => {
           this.textInput = value
           Log.info('Index', 'TextInput onChange, new value:', value)
@@ -558,19 +587,25 @@ struct Index {
         Button({ type: ButtonType.Circle }) {
           if (this.isSyncing) {
             LoadingProgress()
-              .width(20)
-              .height(20)
+              .width(22)
+              .height(22)
               .color(Color.White)
           } else {
             Text('➤')
-              .fontSize(20)
+              .fontSize(22)
               .fontColor(Color.White)
+              .fontWeight(FontWeight.Bold)
           }
         }
-        .width(40)
-        .height(40)
-        .margin({ left: 8 })
+        .width(44)
+        .height(44)
+        .margin({ left: 10 })
         .backgroundColor(this.textInput && !this.isSyncing ? '#007AFF' : '#C7C7CC')
+        .shadow({ 
+          radius: 8, 
+          color: this.textInput && !this.isSyncing ? '#007AFF30' : '#00000010', 
+          offsetY: 2 
+        })
         .enabled(!!this.textInput && !this.isSyncing)
         .onClick(() => {
           Log.info('Index', '=== Send button clicked ===')
@@ -593,9 +628,10 @@ struct Index {
         })
       }
       .width('100%')
-      .padding(12)
-      .backgroundColor('#F9F9F9')
-      .borderRadius({ topLeft: 12, topRight: 12 })
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor('#FFFFFF')
+      .borderRadius({ topLeft: 16, topRight: 16 })
+      .shadow({ radius: 4, color: '#00000008', offsetY: -2 })
 
     }
     .width('100%')
