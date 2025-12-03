@@ -133,27 +133,33 @@ struct Index {
       // 因为远程同步的数据在本地也可能触发空deviceId的事件
       
       // 获取当前设备的角色标识
-      // 如果两端都是本地启动，需要根据连接情况判断
       let myRole: string
       let remoteRole: string
       
-      if (this.isSender) {
-        myRole = 'sender'
-        remoteRole = 'receiver'
-      } else if (this.isReceiver) {
+      // 优先使用明确的角色标识
+      if (this.isReceiver) {
+        // 被远程启动的接收端
         myRole = 'receiver'
         remoteRole = 'sender'
+        Log.info('kvStore', '✅ Explicit receiver role (remote started)')
+      } else if (this.isSender) {
+        // 明确的发送端
+        myRole = 'sender'
+        remoteRole = 'receiver'
+        Log.info('kvStore', '✅ Explicit sender role')
       } else {
-        // 两端都是本地启动的情况：根据是否先配对来判断
-        // 如果有 RemoteConnectDeviceId，说明是主动发起方（sender）
-        if (this.remoteConnectDeviceId) {
-          Log.info('kvStore', 'No explicit role, inferring as sender based on remote connection')
+        // 本地启动且还没明确角色的情况
+        // 根据是否主动连接来推断
+        if (this.remoteConnectDeviceId && this.connectedDeviceId) {
+          // 有连接ID，说明是主动发起连接的一方
           myRole = 'sender'
           remoteRole = 'receiver'
+          Log.info('kvStore', '🔍 No explicit role, inferring as sender (has connection)')
         } else {
-          Log.info('kvStore', 'No explicit role and no remote connection, inferring as receiver')
+          // 否则默认为接收端
           myRole = 'receiver'
           remoteRole = 'sender'
+          Log.info('kvStore', '🔍 No explicit role, defaulting to receiver')
         }
       }
       
@@ -242,6 +248,47 @@ struct Index {
         })
       }
     })
+    
+    // 注册同步完成回调，主动拉取远程数据
+    this.kvStoreModel.onSyncComplete(() => {
+      Log.info('Index', '🔄 syncComplete triggered - fetching remote data')
+      
+      // 确定远程设备使用的key
+      let remoteKey: string
+      if (this.isReceiver) {
+        // 接收端需要拉取发送端的数据
+        remoteKey = 'messages_sender'
+      } else {
+        // 发送端需要拉取接收端的数据
+        remoteKey = 'messages_receiver'
+      }
+      
+      Log.info('Index', `📥 Fetching data with key: ${remoteKey}`)
+      
+      // 主动从KVStore中获取数据
+      this.kvStoreModel.get(remoteKey, (value: string | undefined) => {
+        if (value === undefined) {
+          Log.info('Index', `⚠️ No data found for key: ${remoteKey}`)
+          return
+        }
+        
+        try {
+          const messages = JSON.parse(value) as string[]
+          Log.info('Index', `✅ Fetched ${messages.length} messages from ${remoteKey}`)
+          
+          // 更新接收到的消息列表
+          const oldLength = this.receivedList.length
+          this.receivedList = messages
+          
+          Log.info('Index', `📊 receivedList updated: ${oldLength} -> ${this.receivedList.length}`)
+          
+          // 更新UI
+          this.updateAllMessages()
+        } catch (error) {
+          Log.error('Index', `❌ Failed to parse messages: ${JSON.stringify(error)}`)
+        }
+      })
+    })
   }
 
   aboutToDisappear(): void {
@@ -322,8 +369,11 @@ struct Index {
     this.allMessages.sort((a, b) => a.timestamp - b.timestamp)
     
     // 使用包含本地 networkId 的唯一 key，这样对方可以识别消息来源
-    const messageKey = 'messages_' + (this.isSender ? 'sender' : 'receiver')
+    // 关键修复：本地启动的设备（发起连接的）使用 sender key
+    // 远程启动的设备（被连接的）使用 receiver key
+    const messageKey = 'messages_' + (this.isReceiver ? 'receiver' : 'sender')
     Log.info('Index', 'Using key:', messageKey)
+    Log.info('Index', 'isReceiver:', this.isReceiver, 'isSender:', this.isSender)
     
     this.isSyncing = true
     Log.info('Index', 'Set isSyncing = true')

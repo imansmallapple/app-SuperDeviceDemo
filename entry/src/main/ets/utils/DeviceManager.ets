@@ -73,11 +73,13 @@ class DeviceManager {
             }
             
             // 如果有待启动的 Ability，现在启动它
+            // 关键修复：使用 remoteDevice（包含完整 networkId），而不是保存的 device
             if (this.pendingStartAbility && this.pendingStartAbility.device.deviceId === remoteDevice.deviceId) {
               Log.info('deviceStateChange', 'Device paired, starting ability now')
+              Log.info('deviceStateChange', `Using networkId: ${remoteDevice.networkId}`)
               this.startAbility(
                 this.pendingStartAbility.context,
-                this.pendingStartAbility.device,
+                remoteDevice,  // 使用 remoteDevice 而不是 pendingStartAbility.device
                 this.pendingStartAbility.shared_list
               )
               this.pendingStartAbility = undefined
@@ -292,6 +294,12 @@ class DeviceManager {
     shared_list: string[]): void {
     // 获取本地设备的 networkId
     const localNetworkId = this.myDeviceManager?.getLocalDeviceNetworkId() || ''
+    
+    // 设置远程设备连接状态
+    this.isPaired = true
+    AppStorage.setOrCreate('RemoteConnectDeviceId', device.networkId)
+    AppStorage.setOrCreate('isPaired', this.isPaired)
+    Log.info('DeviceManager', '✅ Set RemoteConnectDeviceId: ' + device.networkId)
     
     let wantValue: Want = {
       bundleName: context.abilityInfo.bundleName,

@@ -6,6 +6,7 @@ class KvStoreModel {
   kvManager?: distributedKVStore.KVManager;
   kvStore?: distributedKVStore.SingleKVStore;
   private syncCallbacks: ((success: boolean) => void)[] = [];  // 使用队列存储多个回调
+  private syncCompleteCallback?: () => void;  // 同步完成时的回调
 
   /**
    * Create a distributed key-value database.
@@ -135,7 +136,34 @@ class KvStoreModel {
   }
 
   /**
-   * Delete a key from the distributed key-value database.
+   * Get data from the distributed key-value database.
+   *
+   * @param key Store key name to get.
+   * @param callback Callback with the value or undefined if not found.
+   */
+  get(key: string, callback: (value: string | undefined) => void): void {
+    if (this.kvStore === undefined) {
+      Log.error('KvStoreModel', 'get failed: kvStore is undefined');
+      callback(undefined);
+      return;
+    }
+
+    this.kvStore.get(key).then((value) => {
+      if (typeof value === 'string') {
+        Log.info('KvStoreModel', `kvStore.get key=${key} success, value length=${value.length}`);
+        callback(value);
+      } else {
+        Log.warn('KvStoreModel', `kvStore.get key=${key} returned non-string value`);
+        callback(undefined);
+      }
+    }).catch((error: Error) => {
+      Log.warn('KvStoreModel', `kvStore.get key=${key} not found or error: ${JSON.stringify(error)}`);
+      callback(undefined);
+    });
+  }
+
+  /**
+   * Delete data from the distributed key-value database.
    *
    * @param key Store key name to delete.
    * @param callback Optional callback.
@@ -168,12 +196,21 @@ class KvStoreModel {
       return;
     }
 
+    if (!deviceIds || deviceIds.length === 0) {
+      Log.warn('KvStoreModel', 'sync: deviceIds is empty, skipping');
+      return;
+    }
+
+    Log.info('KvStoreModel', `🔄 Calling kvStore.sync(${JSON.stringify(deviceIds)}, PUSH_PULL)...`);
+    
     try {
-      Log.info('KvStoreModel', `🔄 Manually triggering sync to devices: ${JSON.stringify(deviceIds)}`);
       this.kvStore.sync(deviceIds, distributedKVStore.SyncMode.PUSH_PULL);
-      Log.info('KvStoreModel', `✅ sync triggered successfully`);
+      Log.info('KvStoreModel', `✅ sync to ${deviceIds[0]} triggered successfully`);
     } catch (error) {
       Log.error('KvStoreModel', `❌ sync exception: ${JSON.stringify(error)}`);
+      if (error instanceof Error) {
+        Log.error('KvStoreModel', `   Error details: ${error.message}`);
+      }
     }
   }
 
@@ -228,11 +265,25 @@ class KvStoreModel {
         } else {
           Log.info('KvStoreModel', 'No pending callbacks to execute');
         }
+        
+        // 触发同步完成回调（用于主动拉取远程数据）
+        if (this.syncCompleteCallback) {
+          Log.info('KvStoreModel', '🔄 Triggering syncComplete callback to fetch remote data');
+          this.syncCompleteCallback();
+        }
       });
     } catch (error) {
       Log.error('KvStoreModel',
         `setSyncCompleteListener on('syncComplete') failed, err=${JSON.stringify(error)}`);
     }
+  }
+
+  /**
+   * Set callback to be called after sync completes.
+   */
+  onSyncComplete(callback: () => void): void {
+    this.syncCompleteCallback = callback;
+    Log.info('KvStoreModel', '✅ syncComplete callback registered');
   }
 
   /**
@@ -269,9 +320,12 @@ class KvStoreModel {
     try {
       // 使用 PUSH_PULL 模式与指定设备同步
       this.kvStore.sync([deviceId], distributedKVStore.SyncMode.PUSH_PULL)
-      Log.info('KvStoreModel', `✅ Manual PUSH_PULL sync triggered to ${deviceId}`)
+      Log.info('KvStoreModel', `✅ Manual PUSH_PULL sync to ${deviceId} triggered`)
     } catch (error) {
-      Log.error('KvStoreModel', `manualPullSync failed: ${JSON.stringify(error)}`)
+      Log.error('KvStoreModel', `❌ manualPullSync exception: ${JSON.stringify(error)}`)
+      if (error instanceof Error) {
+        Log.error('KvStoreModel', `   Error details: ${error.message}`)
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Want, UIAbility, common, bundleManager, AbilityConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
+import { KeyboardAvoidMode } from '@ohos.arkui.UIContext';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import Log from '../utils/Log';
 import DeviceManager from '../utils/DeviceManager';
@@ -87,6 +88,11 @@ export default class EntryAbility extends UIAbility {
         hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
         return;
       }
+      
+      // 设置键盘避让模式：压缩页面大小
+      windowStage.getMainWindowSync().getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+      Log.info('EntryAbility', 'Keyboard avoid mode set to RESIZE');
+      
       hilog.info(0x0000, 'testTag', 'Succeeded in loading the content.');
     });
   }
