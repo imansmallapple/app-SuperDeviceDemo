@@ -1,47 +1,36 @@
 {
   "app": {
     "signingConfigs": [
-      {
-        "name": "default",
-        "material": {
-          "certpath": "C:/Users/chens/.ohos/config/openharmony/default_app-SuperDeviceDemo_tX-Ebcs9NiE_XE5UxJDFwHXCP1TqMnVDUCZEopVPSJo=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001A302A8A6B73EE6AC37011F8B2CDD3D8722EB225A394B17D19D4B5DA3522FB8E719291E36EEC9B",
-          "profile": "C:/Users/chens/.ohos/config/openharmony/default_app-SuperDeviceDemo_tX-Ebcs9NiE_XE5UxJDFwHXCP1TqMnVDUCZEopVPSJo=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:/Users/chens/.ohos/config/openharmony/default_app-SuperDeviceDemo_tX-Ebcs9NiE_XE5UxJDFwHXCP1TqMnVDUCZEopVPSJo=.p12",
-          "storePassword": "0000001A63A3774458FAFBEE7154D9DEDC15E264A80B7625347E247266CA569CD11ECE2017453AF0D6F0"
-        }
-      }
+
     ],
     "products": [
-//      {
-//        "name": "default",
-//        "signingConfig": "default",
-//        "compileSdkVersion": 20,
-//        "compatibleSdkVersion": 20,
-//        "runtimeOS": "OpenHarmony",
-//        "buildOption": {
-//          "strictMode": {
-//            "caseSensitiveCheck": true,
-//            "useNormalizedOHMUrl": true
-//          }
-//        },
-//        "targetSdkVersion": 20
-//      },
       {
         "name": "default",
         "signingConfig": "default",
-        "targetSdkVersion": "5.1.0(18)",
-        "compatibleSdkVersion": "5.1.0(18)",
-        "runtimeOS": "HarmonyOS",
+        "compileSdkVersion": 20,
+        "compatibleSdkVersion": 20,
+        "runtimeOS": "OpenHarmony",
         "buildOption": {
           "strictMode": {
             "caseSensitiveCheck": true,
             "useNormalizedOHMUrl": true
           }
-        }
-      }
+        },
+        "targetSdkVersion": 20
+      },
+      //      {
+      //        "name": "default",
+      //        "signingConfig": "default",
+      //        "targetSdkVersion": "5.1.0(18)",
+      //        "compatibleSdkVersion": "5.1.0(18)",
+      //        "runtimeOS": "HarmonyOS",
+      //        "buildOption": {
+      //          "strictMode": {
+      //            "caseSensitiveCheck": true,
+      //            "useNormalizedOHMUrl": true
+      //          }
+      //        }
+      //      }
     ],
     "buildModeSet": [
       {
