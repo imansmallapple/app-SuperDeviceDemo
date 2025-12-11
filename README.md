@@ -240,5 +240,5 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICE
 ## Contact
 
 * **Author**: imansmallapple
-* **Repository**: [https://github.com/imansmallapple/app-SuperDeviceDemo](https://github.com/imansmallapple/app-SuperDeviceDemo)
-* **Issues**: [https://github.com/imansmallapple/app-SuperDeviceDemo/issues](https://github.com/imansmallapple/app-SuperDeviceDemo/issues)
+* **Repository**: [https://github.com/eclipse-oniro4openharmony/app-SuperDeviceDemo](https://github.com/eclipse-oniro4openharmony/app-SuperDeviceDemo)
+* **Issues**: [https://github.com/eclipse-oniro4openharmony/app-SuperDeviceDemo/issues](https://github.com/eclipse-oniro4openharmony/app-SuperDeviceDemo/issues)
