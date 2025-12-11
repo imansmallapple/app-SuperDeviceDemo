@@ -1,18 +1,25 @@
-import deviceManager from '@ohos.distributedDeviceManager'
+import { distributedDeviceManager } from '@kit.DistributedServiceKit'
 import Log from './Log'
-import common from '@ohos.app.ability.common'
-import Want from '@ohos.app.ability.Want'
-import { BusinessError } from '@ohos.base'
+import { BusinessError } from '@kit.BasicServicesKit';
+import { Want, common } from '@kit.AbilityKit';
+
+interface PendingStartAbility {
+  context: common.UIAbilityContext;
+  device: distributedDeviceManager.DeviceBasicInfo;
+  shared_list: string[];
+}
 
 class DeviceManager {
   private static instance: DeviceManager | undefined = undefined
-  private myDeviceManager?: deviceManager.DeviceManager
-  private deviceList: deviceManager.DeviceBasicInfo[] = []
-  private availableDeviceList: deviceManager.DeviceBasicInfo[] = []
-  private discoverList: deviceManager.DeviceBasicInfo[] = []
+  private myDeviceManager?: distributedDeviceManager.DeviceManager
+  private deviceList: distributedDeviceManager.DeviceBasicInfo[] = []
+  private availableDeviceList: distributedDeviceManager.DeviceBasicInfo[] = []
+  private discoverList: distributedDeviceManager.DeviceBasicInfo[] = []
   private isDiscovering: boolean = false
   private boundDeviceList: string[] = []
   private isPaired: boolean = false
+  private pendingStartAbility?: PendingStartAbility
+  private bindTimeoutId?: number
 
   static getInstance(): DeviceManager {
     if (!DeviceManager.instance) {
@@ -28,7 +35,7 @@ class DeviceManager {
     }
 
     try {
-      this.myDeviceManager = deviceManager.createDeviceManager("com.example.superdevicedemo");
+      this.myDeviceManager = distributedDeviceManager.createDeviceManager("com.example.superdevicedemo");
 
       this.registerDeviceStateListener();
       this.getLocalDeviceInfo();
@@ -47,24 +54,45 @@ class DeviceManager {
     }
     try {
       this.myDeviceManager.on('deviceStateChange', (data) => {
-        if (!AppStorage.get('isSender')) {
-          AppStorage.setOrCreate('isReceiver', true)
+        if (!data) {
+          return;
         }
-        if (!data) return;
         switch (data.action) {
-          case deviceManager.DeviceStateChange.AVAILABLE:
+          case distributedDeviceManager.DeviceStateChange.AVAILABLE:
             const remoteDevice = data.device
             this.isPaired = true
-            AppStorage.setOrCreate('RemoteConnectDeviceId', remoteDevice.deviceId)
+            AppStorage.setOrCreate('RemoteConnectDeviceId', remoteDevice.networkId)
             AppStorage.setOrCreate('isPaired', this.isPaired)
-            Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName)
+            Log.info('deviceStateChange', 'Paired by device: ' + remoteDevice.deviceName + ', networkId: ' + remoteDevice.networkId)
             this.deviceOnline(data.device);
+            
+            // 清除超时定时器
+            if (this.bindTimeoutId) {
+              clearTimeout(this.bindTimeoutId)
+              this.bindTimeoutId = undefined
+            }
+            
+            // 如果有待启动的 Ability，现在启动它
+            // 关键修复：使用 remoteDevice（包含完整 networkId），而不是保存的 device
+            if (this.pendingStartAbility && this.pendingStartAbility.device.deviceId === remoteDevice.deviceId) {
+              Log.info('deviceStateChange', 'Device paired, starting ability now')
+              Log.info('deviceStateChange', `Using networkId: ${remoteDevice.networkId}`)
+              this.startAbility(
+                this.pendingStartAbility.context,
+                remoteDevice,  // 使用 remoteDevice 而不是 pendingStartAbility.device
+                this.pendingStartAbility.shared_list
+              )
+              this.pendingStartAbility = undefined
+            }
             break;
-          case deviceManager.DeviceStateChange.UNAVAILABLE:
+          case distributedDeviceManager.DeviceStateChange.UNAVAILABLE:
             this.isPaired = false
             AppStorage.setOrCreate('RemoteConnectDeviceId', '')
             AppStorage.setOrCreate('isPaired', this.isPaired)
             this.deviceOffline(data.device);
+            // 注意：不在这里清除 pendingStartAbility
+            // 因为 UNAVAILABLE 可能是配对过程中的中间状态
+            Log.info('deviceStateChange', 'Device unavailable: ' + data.device.deviceName)
             break;
         }
       });
@@ -75,18 +103,23 @@ class DeviceManager {
   }
 
   getLocalDeviceInfo(): void {
-    if (!this.myDeviceManager) return;
+    if (!this.myDeviceManager) {
+      return;
+    }
 
     try {
-      Log.info('DeviceManager', `Local Device ID: ${this.myDeviceManager.getLocalDeviceId()}, Name: ${this.myDeviceManager.getLocalDeviceName()}, Type: ${this.myDeviceManager.getLocalDeviceType()
-        .toString()}, Network ID:${this.myDeviceManager.getLocalDeviceNetworkId()}`);
+      Log.info('DeviceManager',
+        `Local Device ID: ${this.myDeviceManager.getLocalDeviceId()}, Name: ${this.myDeviceManager.getLocalDeviceName()}, Type: ${this.myDeviceManager.getLocalDeviceType()
+          .toString()}, Network ID:${this.myDeviceManager.getLocalDeviceNetworkId()}`);
     } catch (err) {
       Log.error('DeviceManager', `getLocalDeviceInfo failed: ${JSON.stringify(err)}`);
     }
   }
 
   getAvailableDeviceList(): void {
-    if (!this.myDeviceManager) return;
+    if (!this.myDeviceManager) {
+      return;
+    }
 
     try {
       this.availableDeviceList = this.myDeviceManager.getAvailableDeviceListSync();
@@ -101,17 +134,17 @@ class DeviceManager {
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
 
-  deviceOnline(device: deviceManager.DeviceBasicInfo): void {
+  deviceOnline(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.availableDeviceList.push(device);
     this.addToDeviceList(device);
   }
 
-  deviceOffline(device: deviceManager.DeviceBasicInfo): void {
+  deviceOffline(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.availableDeviceList = this.availableDeviceList.filter(item => item.networkId !== device.networkId);
     this.deleteFromDeviceList(device);
   }
 
-  addToDeviceList(device: deviceManager.DeviceBasicInfo): void {
+  addToDeviceList(device: distributedDeviceManager.DeviceBasicInfo): void {
     const index = this.deviceList.findIndex(d => d.deviceId === device.deviceId);
     if (index >= 0) {
       this.deviceList[index] = device;
@@ -121,7 +154,7 @@ class DeviceManager {
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
 
-  deleteFromDeviceList(device: deviceManager.DeviceBasicInfo): void {
+  deleteFromDeviceList(device: distributedDeviceManager.DeviceBasicInfo): void {
     this.deviceList = this.deviceList.filter(d => d.deviceId !== device.deviceId);
     AppStorage.setOrCreate('deviceList', this.deviceList);
   }
@@ -140,9 +173,6 @@ class DeviceManager {
       this.myDeviceManager.startDiscovering(
         {
           discoverTargetType: 1
-        },
-        {
-          availableStatus: 0,
         }
       );
       this.isDiscovering = true;
@@ -166,11 +196,26 @@ class DeviceManager {
 
   authenticateDevice(
     context: common.UIAbilityContext,
-    device: deviceManager.DeviceBasicInfo,
+    device: distributedDeviceManager.DeviceBasicInfo,
     shared_list: string[]
   ): void {
-    let tmpList = this.availableDeviceList.filter((item: deviceManager.DeviceBasicInfo) => device.deviceId === item.deviceId);
-    if (tmpList.length > 0) {
+    // 设置为发送端（无论是否需要配对）
+    AppStorage.setOrCreate('isSender', true)
+    AppStorage.setOrCreate('isReceiver', false)
+    
+    // 检查设备是否已经可用（系统层面已配对）
+    const isAvailable = this.availableDeviceList.some(
+      (item: distributedDeviceManager.DeviceBasicInfo) => item.deviceId === device.deviceId
+    )
+    
+    if (isAvailable) {
+      Log.info('DeviceManager', 'Device already available, start ability directly')
+      // 设置连接状态
+      this.isPaired = true
+      AppStorage.setOrCreate('RemoteConnectDeviceId', device.networkId)
+      AppStorage.setOrCreate('isPaired', this.isPaired)
+      Log.info('DeviceManager', 'Set remote device networkId: ' + device.networkId)
+      
       this.startAbility(context, device, shared_list);
       return;
     }
@@ -180,24 +225,45 @@ class DeviceManager {
       return;
     }
 
+    Log.info('DeviceManager', 'Device not available, start binding process with PIN')
     let bindParam: Record<string, string | number> = {
       'bindType': 1,
       'targetPkgName': context.abilityInfo.bundleName,
-      'appName': context.abilityInfo.applicationInfo.name,
+      'appName': context.abilityInfo.labelId.toString(),
+      'appOperation': 'SuperDevice data sync',
+      'customDescription': 'Allow data synchronization'
     }
 
     try {
-      AppStorage.setOrCreate('isSender', true)
+      // 保存待启动的信息，等待 AVAILABLE 事件
+      const pendingInfo: PendingStartAbility = { 
+        context: context, 
+        device: device, 
+        shared_list: shared_list 
+      }
+      this.pendingStartAbility = pendingInfo
+      
+      // 设置 30 秒超时，如果没有收到 AVAILABLE 事件，则清除 pendingStartAbility
+      this.bindTimeoutId = setTimeout(() => {
+        if (this.pendingStartAbility && this.pendingStartAbility.device.deviceId === device.deviceId) {
+          Log.error('DeviceManager', 'Bind timeout, clearing pending start ability')
+          this.pendingStartAbility = undefined
+        }
+        this.bindTimeoutId = undefined
+      }, 30000)
+      
       this.myDeviceManager.bindTarget(device.deviceId, bindParam, (err: BusinessError) => {
-        if (err) {
+        if (err && err.code !== 0) {
           Log.error('Device Manager',
             `authenticateDevice error code=${err.code}, msg=${JSON.stringify(err.message)}`)
+          // 注意：即使回调报错，也不清除 pendingStartAbility
+          // 因为 deviceStateChange AVAILABLE 事件才是最终判断标准
+          // 错误码 7 等可能是中间状态，不影响最终配对结果
           return;
-        } else {
-          Log.info('DeviceManager', 'bindDevice success')
-          this.boundDeviceList.push(device.deviceId);
-          AppStorage.setOrCreate('boundDeviceList', this.boundDeviceList);
         }
+        Log.info('DeviceManager', 'bindDevice callback success, waiting for AVAILABLE event')
+        this.boundDeviceList.push(device.deviceId);
+        AppStorage.setOrCreate('boundDeviceList', this.boundDeviceList);
       })
     } catch (error) {
       Log.error('Device Manager',
@@ -224,13 +290,24 @@ class DeviceManager {
     return this.boundDeviceList;
   }
 
-  startAbility(context: common.UIAbilityContext, device: deviceManager.DeviceBasicInfo, shared_list: string[]): void {
+  startAbility(context: common.UIAbilityContext, device: distributedDeviceManager.DeviceBasicInfo,
+    shared_list: string[]): void {
+    // 获取本地设备的 networkId
+    const localNetworkId = this.myDeviceManager?.getLocalDeviceNetworkId() || ''
+    
+    // 设置远程设备连接状态
+    this.isPaired = true
+    AppStorage.setOrCreate('RemoteConnectDeviceId', device.networkId)
+    AppStorage.setOrCreate('isPaired', this.isPaired)
+    Log.info('DeviceManager', '✅ Set RemoteConnectDeviceId: ' + device.networkId)
+    
     let wantValue: Want = {
       bundleName: context.abilityInfo.bundleName,
       abilityName: 'EntryAbility',
-      deviceId: device.deviceId,
+      deviceId: device.networkId,
       parameters: {
-        shared_list: JSON.stringify(shared_list)
+        shared_list: JSON.stringify(shared_list),
+        senderNetworkId: localNetworkId  // 传递发送端的 networkId
       }
     };
 
@@ -242,18 +319,21 @@ class DeviceManager {
   }
 
   stopDeviceDiscovery(): void {
-    if (this.isDiscovering) {
-      Log.warn('DeviceManager', 'Discovery already in progress, skipping...');
+    if (!this.myDeviceManager) {
+      Log.error('DeviceManager', 'stopDeviceDiscovery failed: manager not initialized');
       return;
     }
 
-    if (!this.myDeviceManager) return;
-
-    try {
-      this.myDeviceManager.stopDiscovering();
-      this.isDiscovering = false;
-    } catch (err) {
-      Log.error('DeviceManager', `stopDeviceDiscovery failed: ${JSON.stringify(err)}`);
+    if (this.isDiscovering) {
+      try {
+        this.myDeviceManager.stopDiscovering()
+        this.isDiscovering = false;
+        Log.info('DeviceManager', 'Device discovery stopped');
+      } catch (err) {
+        Log.error('DeviceManager', `stopDeviceDiscovery failed: ${JSON.stringify(err)}`);
+      }
+    } else {
+      Log.info('DeviceManager', 'Device discovery not active, no need to stop');
     }
   }
 
@@ -263,7 +343,7 @@ class DeviceManager {
     }
   }
 
-  deviceFound(device: deviceManager.DeviceBasicInfo): void {
+  deviceFound(device: distributedDeviceManager.DeviceBasicInfo): void {
     if (!this.discoverList.find(d => d.deviceId === device.deviceId)) {
       this.discoverList.push(device);
       this.addToDeviceList(device);

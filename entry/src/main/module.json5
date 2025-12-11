@@ -35,10 +35,24 @@
     ],
     "requestPermissions": [
       {
-        "name": "ohos.permission.ACCESS_SERVICE_DM",
+        "name": "ohos.permission.DISTRIBUTED_DATASYNC",
+        "reason": "$string:reason",
+        "usedScene": {
+          "abilities": [
+            "FormAbility"
+          ],
+          "when": "always"
+        }
       },
       {
-        "name": "ohos.permission.DISTRIBUTED_DATASYNC",
+        "name": "ohos.permission.ACCESS_SERVICE_DM",
+        "reason": "$string:reason",
+        "usedScene": {
+          "abilities": [
+            "FormAbility"
+          ],
+          "when": "always"
+        }
       }
     ]
   }
